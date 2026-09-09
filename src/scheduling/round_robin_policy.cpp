@@ -5,7 +5,7 @@ using namespace std;
 
 BackendServer* RoundRobinPolicy::selectBackend(const vector<BackendServer*>& backends){
     if(backends.empty()){
-        return nullptr
+        return nullptr;
     }
 
     BackendServer* chosen = backends[nextIndex_ % backends.size()];
