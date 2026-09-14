@@ -24,7 +24,6 @@ class BackendPool{
         void addBackend(unique_ptr<BackendServer> backend);
         bool removeBackend(BackendServer* target);
 
-
         // Returns the already mainatained raw pointer cache, not freshly built
         const vector<BackendServer*>& getBackends() const;
 

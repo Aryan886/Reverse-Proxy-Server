@@ -8,6 +8,10 @@ const string& BackendServer::getHost() const{
     return host_;
 }
 
+int BackendServer::getPort() const{
+    return port_;
+}
+
 int BackendServer::getActiveConnections() const{
     return activeConnections_;
 }

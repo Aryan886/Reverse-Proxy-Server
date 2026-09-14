@@ -26,15 +26,16 @@ bool BackendPool::removeBackend(BackendServer* target){
         rawPointers_.erase(rawIt);
     }
 
-    backends_.erase(it);
+    backends_.erase(it); // removes the unique ptr element, obj is destroyed
     return true;
 }
 
-
+//heands back a reference to maintained cache : O(1) TC as no contrustion and copy happens
 const vector<BackendServer*>& BackendPool::getBackends() const{
     return rawPointers_;
 }
 
+//delegates to the vcetor's own .size()
 size_t BackendPool::size() const{
     return backends_.size();
 }

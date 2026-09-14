@@ -23,9 +23,11 @@ FetchContent_MakeAvailable(googletest)
 enable_testing()
 
 # ---- Subsystem library: backend (Phase 1) ----
-# NOTE: no .cpp files yet — this project intentionally has zero source
-# files until BackendServer/BackendPool/SchedulingPolicy are designed.
-# add_library(backend ...) will be added here once those files exist.
+add_library(backend
+    src/backend/backend_server.cpp
+    src/backend/backend_pool.cpp
+)
+target_include_directories(backend PUBLIC src/backend)
 
 # ---- Tests ----
 add_subdirectory(tests)
