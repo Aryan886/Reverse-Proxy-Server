@@ -1,12 +1,11 @@
-#pragma once //prevents file's contents from being included twice in same translation unit (which causes redefinition error)
+#pragma once
 #include <vector>
-using namespace  std;
 
-class BackendServer; //forward declaration 
+class BackendServer;
 
-class SchedulingPolicy{
-    public: 
-        virtual ~SchedulingPolicy() = default;
-        virtual BackendServer* selectBackend(const vector<BackendServer*>& backend) = 0;
+class SchedulingPolicy {
+public:
+    virtual ~SchedulingPolicy() = default;
+    virtual BackendServer* selectBackend(const std::vector<BackendServer*>& backends) = 0;
 };
 

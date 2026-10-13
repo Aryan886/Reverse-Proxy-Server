@@ -29,5 +29,30 @@ add_library(backend
 )
 target_include_directories(backend PUBLIC src/backend)
 
+add_library(scheduling
+    src/scheduling/round_robin_policy.cpp
+    src/scheduling/least_connection_policy.cpp
+)
+target_include_directories(scheduling PUBLIC src/scheduling)
+target_link_libraries(scheduling PUBLIC backend)
+
+add_library(http src/http/http_parser.cpp src/http/header_rewriter.cpp)
+target_include_directories(http PUBLIC src/http)
+
+add_library(routing src/routing/path_router.cpp)
+target_include_directories(routing PUBLIC src/routing)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_library(network src/network/socket.cpp)
+    target_include_directories(network PUBLIC src/network)
+    add_library(proxy src/proxy/reverse_proxy.cpp)
+    target_include_directories(proxy PUBLIC src/proxy)
+    target_link_libraries(proxy PUBLIC network http scheduling routing)
+    add_executable(reverse_proxy src/main.cpp)
+    target_link_libraries(reverse_proxy PRIVATE proxy)
+else()
+    message(STATUS "Linux proxy executable disabled; portable unit tests remain available")
+endif()
+
 # ---- Tests ----
 add_subdirectory(tests)

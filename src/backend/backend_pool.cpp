@@ -1,42 +1,26 @@
 #include "backend_pool.h"
 #include <algorithm>
-using namespace std;
+#include <stdexcept>
+#include <utility>
 
-void BackendPool::addBackend(unique_ptr<BackendServer> backend){
-    //caches raw pointer before moving backend_ into backends_
+void BackendPool::addBackend(std::unique_ptr<BackendServer> backend) {
+    if (!backend) throw std::invalid_argument("Cannot add a null backend");
+    // Finish potentially throwing allocations before changing either membership list.
+    if (backends_.size() == backends_.capacity()) backends_.reserve(backends_.size() * 2 + 1);
+    if (rawPointers_.size() == rawPointers_.capacity()) rawPointers_.reserve(rawPointers_.size() * 2 + 1);
     rawPointers_.push_back(backend.get());
-    backends_.push_back(move(backend));
+    backends_.push_back(std::move(backend));
 }
 
-bool BackendPool::removeBackend(BackendServer* target){
-    //finds the owning unique ptr who manages the obj matches target
-    auto it = find_if(
-        backends_.begin(), backends_.end(), 
-        [target](const unique_ptr<BackendServer>& ptr){
-            return ptr.get() == target;
-        }
-    );
-
-    if(it==backends_.end()){
-        return false;
-    }
-
-    auto rawIt = find(rawPointers_.begin(), rawPointers_.end(), target);
-    if(rawIt != rawPointers_.end()){
-        rawPointers_.erase(rawIt);
-    }
-
-    backends_.erase(it); // removes the unique ptr element, obj is destroyed
+bool BackendPool::removeBackend(BackendServer* target) {
+    auto owner = std::find_if(backends_.begin(), backends_.end(),
+        [target](const std::unique_ptr<BackendServer>& backend) { return backend.get() == target; });
+    if (owner == backends_.end()) return false;
+    rawPointers_.erase(std::find(rawPointers_.begin(), rawPointers_.end(), target));
+    backends_.erase(owner);
     return true;
 }
 
-//heands back a reference to maintained cache : O(1) TC as no contrustion and copy happens
-const vector<BackendServer*>& BackendPool::getBackends() const{
-    return rawPointers_;
-}
-
-//delegates to the vcetor's own .size()
-size_t BackendPool::size() const{
-    return backends_.size();
-}
+const std::vector<BackendServer*>& BackendPool::getBackends() const { return rawPointers_; }
+std::size_t BackendPool::size() const { return backends_.size(); }
 

@@ -22,6 +22,10 @@ _deps/
 *.exe
 *.out
 
+# Python demo/test bytecode
+__pycache__/
+*.pyc
+
 # Editor/OS junk
 .vscode/
 .idea/

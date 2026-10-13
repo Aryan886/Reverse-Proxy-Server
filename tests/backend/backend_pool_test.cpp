@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include "backend_pool.h"
 #include "backend_server.h"
+#include <stdexcept>
 
 /*
 Fix : provides a frehs backendPool to every test so tests 
@@ -71,5 +72,28 @@ TEST_F(BackendPoolTest, RemoveNonExistentBackendFails){
 
     EXPECT_FALSE(removed);
     EXPECT_EQ(pool.size(), 1); // unchanged
+}
+
+TEST_F(BackendPoolTest, RejectsNullWithoutChangingMembership) {
+    pool.addBackend(std::make_unique<BackendServer>("localhost", 9001));
+    BackendServer* original = pool.getBackends()[0];
+    EXPECT_THROW(pool.addBackend(nullptr), std::invalid_argument);
+    EXPECT_EQ(pool.size(), 1u);
+    EXPECT_EQ(pool.getBackends()[0], original);
+}
+
+TEST_F(BackendPoolTest, GrowthKeepsAddressesAndRemovalKeepsOrder) {
+    pool.addBackend(std::make_unique<BackendServer>("localhost", 9001));
+    BackendServer* original = pool.getBackends()[0];
+    for (int port = 9002; port < 9100; ++port) {
+        pool.addBackend(std::make_unique<BackendServer>("localhost", port));
+    }
+    EXPECT_EQ(pool.getBackends()[0], original);
+    BackendServer* removed = pool.getBackends()[1];
+    BackendServer* survivor = pool.getBackends()[2];
+    EXPECT_TRUE(pool.removeBackend(removed));
+    EXPECT_EQ(pool.getBackends()[0], original);
+    EXPECT_EQ(pool.getBackends()[1], survivor);
+    EXPECT_FALSE(pool.removeBackend(nullptr));
 }
 
