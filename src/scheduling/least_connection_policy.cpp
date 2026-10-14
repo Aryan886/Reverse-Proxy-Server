@@ -12,6 +12,6 @@ BackendServer* LeastConnectionPolicy :: selectBackend(const vector<BackendServer
             best = candidate;
         }
 
-        return best;
     }
+    return best;
 }
