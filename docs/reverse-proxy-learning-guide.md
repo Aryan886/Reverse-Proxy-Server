@@ -149,6 +149,50 @@ Practice: for counts 2/2/0, predict the choice. Then mark C unhealthy and predic
 
 ## 5 Understand sockets before epoll
 
+### Reading the network and proxy folders
+
+Start with `ReverseProxy::run()` in `src/proxy/reverse_proxy.cpp`. It creates a
+listener, accepts one client, and calls `handleClient()`. That function reads the
+request, finds a route, selects a backend, connects, sends the request, reads the
+response, and replies. The `stage` string records where an error happened.
+
+Then read `readRequest()` and `readResponse()` in the same file. Each loop asks the
+parser whether the message is complete. If more bytes are needed, it calls
+`receiveMore()`. The two functions are deliberately separate so you can follow
+requests and responses without learning a generic parser wrapper.
+
+Finally open `src/network/socket.cpp`. It contains the OS-specific details:
+
+| Function | What to explain |
+| --- | --- |
+| `createListener()` | Create a TCP socket, bind a port, and listen |
+| `acceptClient()` | Wait for a connection and return its socket and client IP |
+| `resolveBackend()` | Translate a hostname and port into possible addresses |
+| `connectBackend()` | Try those addresses to establish a backend connection |
+| `waitForSocket()` | Wait for readiness, checking the deadline and stop flag |
+| `sendAll()` | Repeat sends until every byte is accepted by the socket |
+| `receiveMore()` | Append available bytes; return false at end of stream |
+
+`#include "socket.h"` refers to our header. `#include <sys/socket.h>` provides
+the system socket API. The capitalized `Socket` class owns a descriptor; the
+lowercase `::socket()` function asks the OS to create one.
+
+Some C++ features remain because they prevent real mistakes:
+
+- A `Socket` destructor closes its descriptor, even when an exception is thrown.
+  Its move operations transfer the descriptor and set the old owner's value to
+  `-1`, meaning it no longer owns a socket.
+- `BackendReservation` increments a count in its constructor and decrements it
+  in its destructor. The inner scope in `handleClient()` ends that reservation
+  before the reply is sent.
+- `unique_ptr` gives an object one owner. In `resolveBackend()`, the second
+  template argument, `decltype(&::freeaddrinfo)`, is the type of the cleanup
+  function: this C API requires `freeaddrinfo()` instead of `delete`.
+- A `Deadline` is a finish time. Every read within one HTTP stage shares it, so a
+  peer cannot extend the timeout indefinitely by sending one byte at a time.
+- `stop` points to a signal flag set by Ctrl+C. `nullptr` means the caller has
+  supplied no flag. It is not a general-purpose thread synchronization mechanism.
+
 A socket is an operating-system communication endpoint. In Linux, the program refers to it using a small integer file descriptor. The descriptor is a handle, not the actual network connection or the port number.
 
 The listening socket waits for new connections. accept creates a separate connected socket for one client. The proxy opens another connected socket to a backend. A proxied exchange therefore has two separate TCP legs: client to proxy and proxy to backend.

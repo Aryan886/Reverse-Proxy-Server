@@ -7,7 +7,9 @@
 #include "path_router.h"
 #include "scheduling_policy.h"
 #include <memory>
+#include <string>
 #include <unordered_map>
+#include <vector>
 
 struct BackendEndpoint {
     std::string host;
@@ -32,12 +34,16 @@ class ReverseProxy {
 public:
     explicit ReverseProxy(ProxyConfig config);
     void run(const volatile std::sig_atomic_t& stop);
+
 private:
     ProxyConfig config_;
+    // Routes borrow these objects; the proxy owns them for its entire lifetime.
     std::vector<std::unique_ptr<BackendPool>> pools_;
     std::vector<std::unique_ptr<SchedulingPolicy>> policies_;
     PathRouter router_;
+    // Resolve each backend once at startup, rather than during every request.
     std::unordered_map<BackendServer*, std::vector<SocketAddress>> backendAddresses_;
+
     void handleClient(const Socket& client, const std::string& clientAddress,
                       const volatile std::sig_atomic_t& stop);
 };
