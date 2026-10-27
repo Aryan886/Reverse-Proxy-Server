@@ -1,14 +1,11 @@
 #include "round_robin_policy.h"
-#include "backend_server.h"
 
-using namespace std;
-
-BackendServer* RoundRobinPolicy::selectBackend(const vector<BackendServer*>& backends){
-    if(backends.empty()){
+BackendServer* RoundRobinPolicy::selectBackend(BackendPool& pool) {
+    if (pool.size() == 0) {
         return nullptr;
     }
 
-    BackendServer* chosen = backends[nextIndex_ % backends.size()];
-    ++nextIndex_;
-    return chosen;
+    BackendServer& server = pool.getBackend(nextIndex_);
+    nextIndex_ = (nextIndex_ + 1) % pool.size();
+    return &server;
 }
