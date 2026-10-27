@@ -1,179 +1,148 @@
-# Reverse Proxy Server (C++17)
+# Small Reverse Proxy — C++ OOP Project
 
-A Semester 3 OOP project at Vishwakarma Institute of Technology, Pune.
-This review checkpoint implements M0–M3 of the [implementation plan](docs/sol-implementation-plan.md):
-a small, sequential Linux reverse proxy with bounded HTTP forwarding, path routing
-and load balancing. The scope is suitable for explaining a first month of work by
-two students; it is not a claim about historical effort or completion percentage.
+A classroom project for learning how C++ objects work together. It forwards real
+GET requests to local Python backends, but keeps the networking scope small.
 
-## What works
+The main topics are encapsulation, composition, inheritance and runtime
+polymorphism. Start with [main.cpp](src/main.cpp), where the pools, policies and
+proxy are created as ordinary objects.
 
-- Validated backend objects and owning pools; tested round-robin and least-connections policies.
-- Linux listener, move-only socket ownership, bounded connect/read/write stages and graceful shutdown.
-- GET and Content-Length POST, fragmented input and complete bounded response validation.
-- Longest path-prefix routing with segment boundaries; original prefix and query preserved.
-- Independent policies for /api and /static; untrusted forwarding headers replaced with the TCP peer address.
-- Correct local errors, hop-header removal, repeated Set-Cookie preservation and backend reservation cleanup.
+## What it does
 
-Request flow:
+- Routes /api requests to two servers and /static requests to one server.
+- Uses round robin to alternate between the API servers.
+- Includes a second scheduling class, LeastConnectionPolicy, to demonstrate
+  two implementations of the same abstract interface.
+- Returns simple errors for a missing route, an unavailable backend or a
+  method other than GET.
 
-```text
-client -> bounded parser -> path router -> pool policy
-       -> connect backend -> rewrite/send request -> validate response
-       -> release backend reservation -> rewrite/send reply -> close sockets
-```
+The application handles one request at a time.
 
-Pools own their BackendServer objects through unique_ptr. Routes borrow pool and
-policy pointers. ReverseProxy owns the pools, policies and startup-resolved addresses;
-membership stays fixed until restart. Local Socket values close their descriptors
-on every exit path. A small BackendReservation releases the selected server's count
-even if connect, send or parsing fails.
+~~~text
+Browser -> ReverseProxy -> PathRouter -> BackendPool
+                                      -> SchedulingPolicy selects a server
+        <- backend response <- Socket sends a GET to that server
+~~~
 
-## Build and test
+## Build and run
 
-Use a C++17 compiler, CMake >= 3.16 and internet on the first configure for
-GoogleTest v1.15.2. Python 3 enables the Linux integration test and demo backends.
+The live proxy needs Linux or Ubuntu in WSL, a C++17 compiler and CMake 3.16+.
+Python 3 runs the example backends. Build without tests if you only want the demo;
+this does not download GoogleTest.
 
-On Linux or Ubuntu in WSL, run from the repository directory:
+~~~bash
+cmake -S . -B out/oop-demo -DBUILD_TESTING=OFF
+cmake --build out/oop-demo -j 4
+~~~
 
-```bash
-cmake -S . -B out/linux-student-build -DCMAKE_BUILD_TYPE=Debug
-cmake --build out/linux-student-build -j 4
-ctest --test-dir out/linux-student-build --output-on-failure
-```
+On this machine, if WSL has no system CMake, use the existing local copy:
 
-This machine has a repo-local Linux CMake at
-out/tooling/cmake-3.31.8-linux-x86_64/bin. If WSL has no system CMake, first run:
-
-```bash
+~~~bash
 export PATH="$PWD/out/tooling/cmake-3.31.8-linux-x86_64/bin:$PATH"
-```
+~~~
 
-On Windows, the portable backend, scheduling, HTTP and routing tests build with MinGW.
-The POSIX executable and socket tests are deliberately Linux-only:
+Start each command in a separate Linux/WSL terminal:
 
-```powershell
-cmake -S . -B out/student-build -G "MinGW Makefiles"
-cmake --build out/student-build -j 4
-ctest --test-dir out/student-build --output-on-failure
-```
-
-Do not reuse the old build/ cache, which references a previous checkout path.
-
-The live suite starts and stops its own backends on temporary ports:
-
-```bash
-python3 tests/integration/proxy_integration_test.py \
-  --proxy out/linux-student-build/reverse_proxy \
-  --backend examples/backend_server.py
-```
-
-It exercises alternation, static routing, binary POST fragments, rewriting, invalid
-framing, body/header limits, close-delimited responses, repeated cookies, disconnects,
-dead backends, stage deadlines, descriptor cleanup, CLI errors and bounded shutdown.
-CTest includes this suite when Python is found.
-
-Verified on 13 October 2026: 35 portable MinGW tests and 42 Linux CTest checks
-passed; the Linux total includes 41 unit cases and the nine-case integration suite.
-
-## Five-minute live demonstration
-
-In three Linux/WSL terminals, start one command in each:
-
-```bash
+~~~bash
 python3 examples/backend_server.py --port 9001 --id api-1
 python3 examples/backend_server.py --port 9002 --id api-2
 python3 examples/backend_server.py --port 9003 --id static-1
-```
+out/oop-demo/reverse_proxy
+~~~
 
-In a fourth terminal:
+In another terminal:
 
-```bash
-out/linux-student-build/reverse_proxy
-```
+~~~bash
+for request in 1 2 3 4; do curl -s http://127.0.0.1:8080/api/id; done
+curl -i http://127.0.0.1:8080/static/item
+curl -i http://127.0.0.1:8080/unknown
+curl -i -X POST http://127.0.0.1:8080/api/id
+~~~
 
-Then run these client commands from another terminal:
+The first command alternates api-1 and api-2. The others show static content,
+404 and 405. You can also open /api/id or /static/item in a browser.
+Press Ctrl+C in each server terminal when finished.
 
-```bash
-for request in 1 2 3 4; do curl -sS http://localhost:8080/api/id; done
-curl -sS http://localhost:8080/static/id
-curl -i http://localhost:8080/apix
-curl -i --data-binary 'hello students' http://localhost:8080/api/echo
-curl -i 'http://localhost:8080/api/slow?seconds=7'
-```
+## Where the OOP concepts appear
 
-The IDs alternate api-1, api-2, api-1, api-2. Static returns static-1. The boundary
-example returns 404, POST echoes its body, and the seven-second backend delay
-returns 504 after the default five-second response-read stage deadline.
-PowerShell users should use curl.exe.
+| Concept | Example |
+| --- | --- |
+| Encapsulation | BackendServer keeps its address, port and connection count private. |
+| Composition | BackendPool contains a vector of BackendServer objects; ReverseProxy contains a PathRouter. |
+| Abstraction | SchedulingPolicy declares what selecting a server means. |
+| Inheritance | RoundRobinPolicy and LeastConnectionPolicy derive from SchedulingPolicy. |
+| Runtime polymorphism | The proxy calls selectBackend through a SchedulingPolicy pointer. |
+| Object lifetime | main owns the pools and policies; local Socket objects close connections in their destructors. |
 
-Stop the api-2 backend and send four more /api/id requests. Selected requests to
-that endpoint return 502; the survivor still returns 200. This version does not
-probe health or automatically retry a failed request. Restart api-2 to restore
-successful forwarding. Ctrl+C stops the proxy and releases its listening port.
+Networking is supporting code in src/network. The algorithms and class
+relationships can be studied and tested without opening a socket.
 
-## Configuration and boundaries
+## Configuration
 
-```bash
-out/linux-student-build/reverse_proxy --help
-out/linux-student-build/reverse_proxy --port 8081 \
-  --api localhost:9101 --api localhost:9102 --static localhost:9103 \
-  --policy round-robin --io-timeout-ms 5000 --connect-timeout-ms 1000
-```
+Edit the small setup in [main.cpp](src/main.cpp), then rebuild. It specifies the
+proxy port, server ports, routes and policy objects. There is no proxy command-line
+configuration parser.
 
-The first --api or --static replaces that pool's defaults; repeated arguments add
-replicas. --policy least-connections uses the same selection interface. In this
-sequential version, requests usually see zero counts and ties select the first
-eligible backend. Its advantage requires overlapping requests in M4.
+To try the other policy, include least_connection_policy.h and replace
+RoundRobinPolicy apiPolicy with LeastConnectionPolicy apiPolicy. The rest of the
+proxy code stays the same. Because requests run one at a time, connection counts
+normally return to zero before the next selection, so least connections usually
+chooses the first server. Its unit test uses counts 3, 1 and 2 to show its logic.
 
-ProxyConfig and the example setup in main.cpp keep settings simple. Limits default
-to 16 KiB of headers and 1 MiB for each body; timeouts apply to the whole stage,
-rather than restarting after each byte. Backend DNS resolution happens once at
-startup, outside request deadlines. Restart after endpoint/DNS changes.
-An empty or entirely unhealthy matched pool maps to 503; unmatched paths map to 404.
-Health values are setup/test state until active probes are added.
+Routes use the first matching prefix in registration order. Put more specific
+routes before broad ones. /api matches /api/id but does not match /apix.
+Duplicate prefixes also use the first registered route. Create pools and policies
+before the proxy, use one policy object per pool and finish adding servers before
+run(). Routes borrow these objects; they do not own them. Socket setup checks the
+proxy port when run() starts listening.
 
-This educational HTTP subset uses one request and one upstream connection per
-client, fully buffers messages, and sends Connection: close. HTTP/1.1 origin-form
-GET/POST requests need one Host; the Host subset accepts ordinary DNS names or
-bracketed hexadecimal IPv6 with an optional numeric port. It does not admit every
-URI host form. It rejects transfer encodings, Expect, upgrades, CONNECT,
-informational upstream replies, ambiguous framing and buffered pipelining.
-Later pipelined bytes are never treated as a second request. Upstream HTTP/1.0
-and HTTP/1.1 responses can use Content-Length or close-delimited framing.
-204/205/304 responses carry no body. Unsupported upstream replies produce 502.
+## Tests
 
-Error mapping: 400 malformed request, 404 no route, 408 client read deadline,
-413 body limit, 417 Expect, 431 header limit, 501 unsupported client feature,
-502 upstream connection/protocol failure, 503 no eligible backend, 504 upstream deadline.
+Tests reuse GoogleTest v1.15.2; the first test configure needs internet unless the
+source is already cached.
 
-M4 epoll, M5 workers, M6 cache, M7 active health checks and M8 Docker/performance
-measurement remain pending. This checkpoint handles one active exchange at a time;
-a slow client can delay other clients until its stage deadline. It provides no TLS,
-streaming, chunked decoding, keep-alive or live reconfiguration.
+~~~bash
+cmake -S . -B out/oop-tests -DBUILD_TESTING=ON
+cmake --build out/oop-tests -j 4
+ctest --test-dir out/oop-tests --output-on-failure
+~~~
 
-Protocol choices follow [RFC 9112](https://www.rfc-editor.org/rfc/rfc9112.html) and
-[RFC 9110](https://www.rfc-editor.org/rfc/rfc9110.html). Socket completion and writes
-follow the Linux [connect](https://man7.org/linux/man-pages/man2/connect.2.html)
-and [send](https://man7.org/linux/man-pages/man2/send.2.html) documentation.
+Stop the running demo before testing: the integration test uses ports 8080 and
+9001-9003, starts its own processes and cleans them up afterward. It checks
+alternation, routing, GET-only behavior, a request arriving in pieces, an
+incomplete request timing out and a stopped backend.
 
-## Source and study map
+On Windows, the class, routing and HTTP helper tests work with MinGW:
 
-```text
-src/backend/     BackendServer and owning BackendPool
-src/scheduling/  SchedulingPolicy and two selection algorithms
-src/http/        Request/response structs, pure parser, header rewriting
-src/network/     Linux Socket, listener, address resolution and bounded I/O
-src/routing/     Longest segment-prefix matching
-src/proxy/       Sequential request orchestration and ProxyConfig
-src/main.cpp     Demo routes, CLI and stop signals
-tests/           Mirrored unit tests plus real HTTP integration tests
-examples/        Controlled Python backend
-docs/            Plan, implementation notes and learning/viva guide
-```
+~~~powershell
+cmake -S . -B out/oop-windows-tests -G "MinGW Makefiles"
+cmake --build out/oop-windows-tests -j 4
+ctest --test-dir out/oop-windows-tests --output-on-failure
+~~~
 
-Read [implementation notes](docs/implementation-notes.md) for actual verification
-evidence and [the learning guide](docs/reverse-proxy-learning-guide.md) for ownership,
-algorithm traces and a request walkthrough. For rehearsal, one student can explain
-backend ownership, policies and routing; the other can explain sockets, HTTP and
-failure handling. Both should trace an entire POST exchange and explain one test.
+Use a fresh build folder; older caches may refer to another checkout or toolchain.
+
+## Deliberate limits
+
+This version is a local classroom demo, with the listener bound to 127.0.0.1.
+
+- GET only; no POST bodies, client-header forwarding, authentication or cookies.
+  A fresh HTTP/1.0 GET carries the original path/query and the backend Host.
+- Numeric IPv4 backend addresses only; no DNS lookup or IPv6 support.
+- One request per client connection; no concurrency, keep-alive, caching or retries.
+- Backends must send ordinary HTTP responses and close their connections, as the
+  included Python example does. Replies are buffered and relayed unchanged.
+  Only an empty reply is rejected; response parsing and header rewriting are
+  outside this version.
+- Every configured server stays in rotation. There is no health flag or automatic
+  health checking; a stopped server causes a 502 when selected.
+- Requests are limited to 8 KiB while reading headers and responses to 1 MiB.
+  Socket operations have a five-second timeout, not a whole-request deadline.
+- Ctrl+C ends the process. There is no custom graceful-shutdown system.
+- Errors are kept simple: 400 for request read/parse failures, 404 for no route,
+  405 for unsupported methods, 502 for backend failures and 503 for an empty pool.
+
+See the [learning guide](docs/reverse-proxy-learning-guide.md) for class walkthroughs
+and the [demo guide](docs/demo-guide.md) for a short presentation.
+The older implementation plan, project context and Word documents describe the
+previous larger scope; the current Markdown guides describe this version.

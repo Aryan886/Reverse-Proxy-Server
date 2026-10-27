@@ -3,5 +3,5 @@
 
 class LeastConnectionPolicy : public SchedulingPolicy {
 public:
-    BackendServer* selectBackend(const std::vector<BackendServer*>& backends) override;
+    BackendServer* selectBackend(BackendPool& pool) override;
 };

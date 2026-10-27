@@ -1,13 +1,13 @@
 #include "least_connection_policy.h"
-#include "backend_server.h"
 
-BackendServer* LeastConnectionPolicy::selectBackend(const std::vector<BackendServer*>& backends) {
-    BackendServer* best = nullptr;
-    for (BackendServer* candidate : backends) {
-        if (!candidate || !candidate->isHealthy()) continue;
-        if (!best || candidate->getActiveConnections() < best->getActiveConnections()) {
-            best = candidate;
+BackendServer* LeastConnectionPolicy::selectBackend(BackendPool& pool) {
+    BackendServer* selectedServer = nullptr;
+    for (std::size_t index = 0; index < pool.size(); ++index) {
+        BackendServer& server = pool.getBackend(index);
+        if (selectedServer == nullptr ||
+            server.getActiveConnections() < selectedServer->getActiveConnections()) {
+            selectedServer = &server;
         }
     }
-    return best;
+    return selectedServer;
 }

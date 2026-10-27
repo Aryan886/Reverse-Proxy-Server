@@ -1,6 +1,5 @@
 #pragma once
 #include <string>
-#include <string_view>
 #include <vector>
 
 class BackendPool;
@@ -15,7 +14,9 @@ struct Route {
 class PathRouter {
 public:
     void addRoute(std::string prefix, BackendPool& pool, SchedulingPolicy& policy);
-    const Route* findRoute(std::string_view target) const;
+    const Route* findRoute(const std::string& target) const;
+
 private:
+    // Pools and policies are created in main and must outlive the router.
     std::vector<Route> routes_;
 };

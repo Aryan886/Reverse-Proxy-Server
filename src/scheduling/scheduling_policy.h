@@ -1,11 +1,9 @@
 #pragma once
-#include <vector>
-
-class BackendServer;
+#include "backend_pool.h"
 
 class SchedulingPolicy {
 public:
     virtual ~SchedulingPolicy() = default;
-    virtual BackendServer* selectBackend(const std::vector<BackendServer*>& backends) = 0;
+    virtual BackendServer* selectBackend(BackendPool& pool) = 0;
 };
 

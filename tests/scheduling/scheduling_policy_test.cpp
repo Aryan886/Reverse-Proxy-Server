@@ -1,66 +1,65 @@
 #include <gtest/gtest.h>
-#include "backend_server.h"
 #include "least_connection_policy.h"
 #include "round_robin_policy.h"
 
-TEST(LeastConnectionPolicyTest, SelectsMinimumAfterExaminingEveryBackend) {
-    BackendServer first("localhost", 9001);
-    BackendServer second("localhost", 9002);
-    BackendServer third("localhost", 9003);
-    for (int count = 0; count < 3; ++count) first.incrementConnections();
-    second.incrementConnections();
-    for (int count = 0; count < 2; ++count) third.incrementConnections();
-    LeastConnectionPolicy policy;
-    EXPECT_EQ(policy.selectBackend({&first, &second, &third}), &second);
-}
-
-TEST(RoundRobinPolicyTest, RotatesThroughEveryServer) {
-    BackendServer first("localhost", 9001), second("localhost", 9002), third("localhost", 9003);
+TEST(RoundRobinPolicyTest, RotatesAndWrapsAround) {
+    BackendPool pool;
+    pool.addBackend(BackendServer("127.0.0.1", 9001));
+    pool.addBackend(BackendServer("127.0.0.1", 9002));
     RoundRobinPolicy policy;
-    std::vector<BackendServer*> servers{&first, &second, &third};
-    EXPECT_EQ(policy.selectBackend(servers), &first);
-    EXPECT_EQ(policy.selectBackend(servers), &second);
-    EXPECT_EQ(policy.selectBackend(servers), &third);
-    EXPECT_EQ(policy.selectBackend(servers), &first);
+
+    EXPECT_EQ(policy.selectBackend(pool), &pool.getBackend(0));
+    EXPECT_EQ(policy.selectBackend(pool), &pool.getBackend(1));
+    EXPECT_EQ(policy.selectBackend(pool), &pool.getBackend(0));
 }
 
-TEST(RoundRobinPolicyTest, HandlesEmptySingleAndChangedSize) {
-    BackendServer first("localhost", 9001), second("localhost", 9002);
+TEST(RoundRobinPolicyTest, HandlesEmptyAndSingleServerPools) {
+    BackendPool pool;
     RoundRobinPolicy policy;
-    EXPECT_EQ(policy.selectBackend({}), nullptr);
-    EXPECT_EQ(policy.selectBackend({&first, &second}), &first);
-    EXPECT_EQ(policy.selectBackend({&first}), &first);
-    EXPECT_EQ(policy.selectBackend({&first}), &first);
+    EXPECT_EQ(policy.selectBackend(pool), nullptr);
+
+    pool.addBackend(BackendServer("127.0.0.1", 9001));
+    EXPECT_EQ(policy.selectBackend(pool), &pool.getBackend(0));
+    EXPECT_EQ(policy.selectBackend(pool), &pool.getBackend(0));
 }
 
-TEST(RoundRobinPolicyTest, SkipsNullAndUnhealthyServers) {
-    BackendServer first("localhost", 9001), second("localhost", 9002), third("localhost", 9003);
-    second.setHealthy(false);
-    RoundRobinPolicy policy;
-    std::vector<BackendServer*> servers{&first, nullptr, &second, &third};
-    EXPECT_EQ(policy.selectBackend(servers), &first);
-    EXPECT_EQ(policy.selectBackend(servers), &third);
-    EXPECT_EQ(policy.selectBackend(servers), &first);
-    first.setHealthy(false);
-    third.setHealthy(false);
-    EXPECT_EQ(policy.selectBackend(servers), nullptr);
-}
+TEST(LeastConnectionPolicyTest, ChoosesTheSmallestCount) {
+    BackendPool pool;
+    pool.addBackend(BackendServer("127.0.0.1", 9001));
+    pool.addBackend(BackendServer("127.0.0.1", 9002));
+    pool.addBackend(BackendServer("127.0.0.1", 9003));
+    for (int count = 0; count < 3; ++count) {
+        pool.getBackend(0).incrementConnections();
+    }
+    pool.getBackend(1).incrementConnections();
+    for (int count = 0; count < 2; ++count) {
+        pool.getBackend(2).incrementConnections();
+    }
 
-TEST(LeastConnectionPolicyTest, KeepsFirstEligibleOnTies) {
-    BackendServer first("localhost", 9001), second("localhost", 9002);
     LeastConnectionPolicy policy;
-    EXPECT_EQ(policy.selectBackend({nullptr, &first, &second}), &first);
-    first.setHealthy(false);
-    EXPECT_EQ(policy.selectBackend({&first, &second}), &second);
-    second.setHealthy(false);
-    EXPECT_EQ(policy.selectBackend({nullptr, &first, &second}), nullptr);
-    EXPECT_EQ(policy.selectBackend({}), nullptr);
+    EXPECT_EQ(policy.selectBackend(pool), &pool.getBackend(1));
 }
 
-TEST(LeastConnectionPolicyTest, SkipsUnhealthyMinimum) {
-    BackendServer first("localhost", 9001), second("localhost", 9002);
-    first.setHealthy(false);
-    second.incrementConnections();
+TEST(LeastConnectionPolicyTest, HandlesEmptyPoolsAndKeepsFirstServerOnTies) {
+    BackendPool pool;
     LeastConnectionPolicy policy;
-    EXPECT_EQ(policy.selectBackend({&first, &second}), &second);
+    EXPECT_EQ(policy.selectBackend(pool), nullptr);
+
+    pool.addBackend(BackendServer("127.0.0.1", 9001));
+    pool.addBackend(BackendServer("127.0.0.1", 9002));
+    EXPECT_EQ(policy.selectBackend(pool), &pool.getBackend(0));
+}
+
+TEST(SchedulingPolicyTest, CallsDerivedClassesThroughTheSameInterface) {
+    BackendPool pool;
+    pool.addBackend(BackendServer("127.0.0.1", 9001));
+    pool.addBackend(BackendServer("127.0.0.1", 9002));
+    pool.getBackend(0).incrementConnections();
+
+    RoundRobinPolicy roundRobin;
+    LeastConnectionPolicy leastConnections;
+    SchedulingPolicy* policy = &roundRobin;
+    EXPECT_EQ(policy->selectBackend(pool), &pool.getBackend(0));
+    policy = &leastConnections;
+    EXPECT_EQ(policy->selectBackend(pool), &pool.getBackend(1));
 }

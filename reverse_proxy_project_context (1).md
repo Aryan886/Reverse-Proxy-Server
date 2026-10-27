@@ -1,3 +1,9 @@
+> Historical project context: the user reduced the scope on 21 October 2026
+> to a small working proxy for learning and presenting OOP. The current README
+> and Markdown learning/demo guides supersede the roadmap below.
+> Concurrency, caching, health probes and general HTTP support are outside
+> the current project scope.
+
 # Reverse Proxy Server — Claude Project Context
 
 ## 1. Purpose of This Context

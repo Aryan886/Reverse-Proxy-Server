@@ -4,7 +4,8 @@
 
 class RoundRobinPolicy : public SchedulingPolicy {
 public:
-    BackendServer* selectBackend(const std::vector<BackendServer*>& backends) override;
+    BackendServer* selectBackend(BackendPool& pool) override;
+
 private:
     std::size_t nextIndex_ = 0;
 };

@@ -1,3 +1,88 @@
+# Current scope — 27 October 2026
+
+A second simplification keeps the same GET demo and OOP classes:
+
+- Removed the manual backend health flag and the scheduling branches that skipped
+  unhealthy servers. Round robin now selects one server and advances its index.
+- Moved connection counting around the forwarding try/catch in handleClient().
+  The count is decreased in one place after success or failure, and forwarding
+  no longer catches an exception just to wrap and rethrow it.
+- Removed the extra HTTP-format check on backend replies. Empty replies still
+  fail, but local demo backends are responsible for valid HTTP responses.
+- Duplicate route prefixes use the existing first-match rule. Port validation
+  remains in socket setup instead of also running in the proxy constructor.
+- Split the request-line and HTTP-version checks into separate, readable steps.
+  Input validation, buffer limits, timeouts and complete reads/writes remain.
+- Kept both scheduling policies to demonstrate inheritance and virtual dispatch.
+  Removing least connections would be smaller, but would lose that useful example.
+- Updated affected unit tests and guides. The live integration suite remains;
+  the redundant proxy configuration test target was removed.
+
+Use a separate policy object for each pool, configure it before run(), and use the
+included local backends. This keeps the request flow simple without adding another
+ownership helper or error-handling abstraction.
+
+Verification on 27 October 2026:
+
+- MinGW: all 20 portable CTest cases passed. The routing cases were rebuilt and
+  passed again after adding an assertion for duplicate prefixes.
+- Ubuntu WSL: all 25 CTest checks passed, including the six live integration
+  cases for routing, round robin, GET-only requests, partial input, timeout
+  recovery and a stopped backend.
+- Both C++ builds completed with warnings enabled and no compiler warnings.
+- C++ source/header files total 514 lines, down from 541 in the previous version.
+
+## Previous simplification — 21 October 2026
+
+The project now prioritizes a small OOP learning exercise. The entries below
+this section describe the earlier, broader implementation, not the current scope.
+
+- BackendPool stores server values in one vector. Runtime pool removal and the
+  separate owning/borrowed pointer collections were removed.
+- SchedulingPolicy now accepts a BackendPool reference. Both derived algorithms
+  remain, with direct tests of virtual dispatch and server selection.
+- main.cpp creates the pools, policy objects and proxy directly. The former
+  ProxyConfig hierarchy and proxy CLI parser were removed.
+- Routing uses the first matching registered prefix rather than selecting the
+  longest prefix automatically. Add specific prefixes first.
+- Networking uses a small blocking Socket class, numeric IPv4 addresses,
+  loopback listening and five-second per-operation timeouts. DNS caching,
+  poll-based deadlines and shutdown cancellation were removed.
+- The HTTP scope is GET only. The proxy reads a request line, constructs a fresh
+  backend request and relays a buffered response from a backend that closes.
+  POST bodies, general header rewriting, detailed response framing validation,
+  IPv6 Host validation and special HTTP status rules were removed.
+- Basic limits, port/path validation, partial-read/write loops, disconnect errors
+  and socket destruction remain. The connection count is released on forwarding
+  success or failure without a separate reservation class.
+- The README, learning guide and teacher demo guide now describe this scope.
+  Older Word documents and the original plan/context are historical references.
+
+Trade-offs: a vector of values is easier to teach but may invalidate element
+pointers when it grows; configure membership before run(). Sequential blocking
+I/O keeps control flow simple but one slow client delays others. Timeouts reset
+for each operation, so they are not an overall request deadline. Local backends
+are trusted to send complete ordinary responses.
+
+The current design introduces no new library. GoogleTest remains optional at
+build time; BUILD_TESTING=OFF builds the demo without fetching it.
+
+Verification on 21 October 2026:
+
+- MinGW: built out/oop-student-build and passed all 21 portable CTest cases.
+- Ubuntu WSL: built out/oop-linux-build and passed all 28 CTest checks
+  (27 unit cases plus one integration suite containing six live cases).
+- The live cases covered alternation, routing, GET-only behavior, fragmented
+  request input, incomplete-request timeout/recovery and stopped-backend recovery.
+- Both test builds reused the existing GoogleTest source under out/our_build/_deps.
+- Configured and built out/oop-demo with BUILD_TESTING=OFF, without fetching tests.
+- The C++ builds used -Wall -Wextra with no warnings. Python bytecode compilation
+  and git diff --check passed.
+- C++ source/header line count decreased from 1,273 to 541. No automatic
+  health-checking, throughput or full HTTP-compatibility claim is made.
+
+---
+
 # Implementation Notes
 
 Running log of concrete decisions made during development.
